@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Frymo Translatepress Integration
  * Plugin URI: https://github.com/frymo-de/frymo-translatepress-integration
- * Version: 0.3.2
+ * Version: 0.3.3
  * Description: Adds seamless multilingual support to Frymo by integrating with TranslatePress.
  * Text Domain: frymo-tpi
  * Author: Stark Systems UG
@@ -166,6 +166,17 @@ add_filter( 'frymo/xml_process/search_existing_object_args', 'frymo_tpi_search_e
  * @return array Modified WP_Query arguments with a tax_query constraint.
  */
 function frymo_tpi_search_existing_object_args( $args, $immobilie, $options ) {
+
+	/**
+	 * Check if Frymo_Process_Xml_File class exists and if the method add_language_to_existing_object_query_args exists.
+	 *
+	 * @return array Modified WP_Query arguments with a tax_query constraint.
+	 */
+	if ( ! class_exists( 'Frymo_Process_Xml_File' )
+		|| ! method_exists( 'Frymo_Process_Xml_File', 'add_language_to_existing_object_query_args' ) ) {
+		return $args;
+	}
+
 	// Extract language from the XML node.
 	$object_lang = (string) $immobilie->verwaltung_techn->sprache;
 
