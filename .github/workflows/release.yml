@@ -5,12 +5,17 @@ on:
     branches:
       - release
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v5
 
     - name: Extract strings
       run: |
@@ -27,17 +32,15 @@ jobs:
         RELEASE="${RELEASE//$'####'/''}"
         echo "RELEASE=$RELEASE" >> $GITHUB_ENV
 
-    - name: Create Release
-      id: create-release
-      uses: actions/create-release@v1
+    - name: Ensure release does not already exist
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.PLUGIN_VERSION }}
-        release_name: Release ${{ env.PLUGIN_VERSION }}
-        body_path: release.md
-        draft: false
-        prerelease: false
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG="${{ env.PLUGIN_VERSION }}"
+        if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          echo "::error::Release for tag $TAG already exists. Bump the version in frymo-translatepress-integration.php before releasing."
+          exit 1
+        fi
 
     - name: Remove unnecessary files and folders
       run: |
@@ -61,21 +64,26 @@ jobs:
         cp frymo-translatepress-integration/changelog.md .
         rm -rf frymo-translatepress-integration
 
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+    - name: Create Release
+      id: create-release
+      uses: softprops/action-gh-release@v2.6.1
+      with:
+        tag_name: ${{ env.PLUGIN_VERSION }}
+        name: Release ${{ env.PLUGIN_VERSION }}
+        body_path: release.md
+        draft: false
+        prerelease: false
+        target_commitish: ${{ github.sha }}
+        files: frymo-translatepress-integration-${{ env.PLUGIN_VERSION }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: frymo-translatepress-integration-${{ env.PLUGIN_VERSION }}.zip
-        asset_name: frymo-translatepress-integration-${{ env.PLUGIN_VERSION }}.zip
-        asset_content_type: application/zip
 
     - name: Send custom JSON data to Slack workflow
       id: slack
-      uses: slackapi/slack-github-action@v1.23.0
+      uses: slackapi/slack-github-action@v3.0.1
       with:
-        # For posting a rich message using Block Kit
+        webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+        webhook-type: incoming-webhook
         payload: |
           {
             "blocks": [
@@ -115,25 +123,24 @@ jobs:
                       "emoji": true
                     },
                     "value": "download",
-                    "url": "${{ steps.create-release.outputs.html_url }}"
+                    "url": "${{ steps.create-release.outputs.url }}"
                   }
                 ]
               }
             ]
           }
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
 
   send-slack-message:
     needs: create-release
-    if: ${{failure()}}
+    if: ${{ failure() }}
     runs-on: ubuntu-latest
     steps:
     - name: Send Slack Message
-      uses: slackapi/slack-github-action@v1.23.0
+      uses: slackapi/slack-github-action@v3.0.1
       with:
+        webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+        webhook-type: incoming-webhook
         payload: |
           {
             "blocks": [
@@ -146,6 +153,3 @@ jobs:
               }
             ]
           }
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
