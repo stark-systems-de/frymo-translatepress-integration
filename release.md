@@ -1,1 +1,1 @@
-- Internal: Update filter hook name for search object args.
+- Internal: Add Frymo compatibility guard for XML object search language filter.
